@@ -19,6 +19,7 @@ pub struct Snippet {
 pub struct AppConfig {
     pub focus_duration_mins: u32,
     pub task_note: String,
+    pub git_repo_path: Option<String>,
     pub quick_links: Vec<QuickLink>,
     pub snippets: Vec<Snippet>,
 }
@@ -28,6 +29,7 @@ impl Default for AppConfig {
         Self {
             focus_duration_mins: 25,
             task_note: "Phase 2 Dev Island".to_string(),
+            git_repo_path: Some(".".to_string()),
             quick_links: vec![
                 QuickLink {
                     title: "Terminal".to_string(),

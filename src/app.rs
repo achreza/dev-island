@@ -23,7 +23,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use crate::animation::Animation;
 use crate::config::AppConfig;
-use crate::features::{FocusTimer, FocusTimerStatus, QuickLinkLauncher, SnippetManager, TaskNote};
+use crate::features::{
+    FocusTimer, FocusTimerStatus, GitStatusMonitor, QuickLinkLauncher, SnippetManager, TaskNote,
+};
 use crate::platform::{
     AutostartManager, DibBuffer, GlobalShortcut, MonitorGeometry, TrayIcon, HOTKEY_TOGGLE_ID,
     IDM_EXIT, IDM_TOGGLE_AUTOSTART, IDM_TOGGLE_EXPAND, IDM_TOGGLE_VISIBILITY, WM_TRAYICON,
@@ -46,6 +48,7 @@ pub struct AppState {
     pub timer: FocusTimer,
     pub task_note: TaskNote,
     pub snippets: SnippetManager,
+    pub git_monitor: GitStatusMonitor,
     pub dib: DibBuffer,
     pub pixmap: tiny_skia::Pixmap,
     pub geometry: MonitorGeometry,
@@ -88,6 +91,8 @@ impl AppState {
         let timer = FocusTimer::new(config.focus_duration_mins * 60);
         let task_note = TaskNote::new(&config.task_note);
         let snippets = SnippetManager::new(config.snippets.clone());
+        let repo_path = config.git_repo_path.clone().unwrap_or_else(|| ".".to_string());
+        let git_monitor = GitStatusMonitor::new(repo_path);
 
         Self {
             hwnd,
@@ -98,6 +103,7 @@ impl AppState {
             timer,
             task_note,
             snippets,
+            git_monitor,
             dib,
             pixmap,
             geometry,
@@ -120,6 +126,7 @@ impl AppState {
 
         let scale = self.geometry.scale;
         let toast_msg = self.copied_toast.map(|(msg, _)| msg);
+        let git_status = self.git_monitor.get_status();
 
         self.buttons = self.renderer.draw(
             &mut self.pixmap.as_mut(),
@@ -127,6 +134,7 @@ impl AppState {
             scale,
             &self.timer,
             &self.task_note,
+            git_status.as_ref(),
             &self.config.quick_links,
             &self.snippets.snippets,
             toast_msg,

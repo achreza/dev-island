@@ -6,7 +6,7 @@ use std::fs;
 
 use crate::animation::Animation;
 use crate::config::{QuickLink, Snippet};
-use crate::features::{FocusTimer, FocusTimerStatus, TaskNote};
+use crate::features::{FocusTimer, FocusTimerStatus, GitRepoStatus, TaskNote};
 use crate::render::theme::Theme;
 
 pub struct Renderer {
@@ -55,6 +55,7 @@ impl Renderer {
         scale: f32,
         timer: &FocusTimer,
         task_note: &TaskNote,
+        git_status: Option<&GitRepoStatus>,
         quick_links: &[QuickLink],
         snippets: &[Snippet],
         copied_feedback: Option<&str>,
@@ -107,6 +108,7 @@ impl Renderer {
                     scale,
                     timer,
                     task_note,
+                    git_status,
                     alpha,
                 );
             }
@@ -125,6 +127,7 @@ impl Renderer {
                     scale,
                     timer,
                     task_note,
+                    git_status,
                     quick_links,
                     snippets,
                     copied_feedback,
@@ -174,6 +177,7 @@ impl Renderer {
         scale: f32,
         timer: &FocusTimer,
         task_note: &TaskNote,
+        git_status: Option<&GitRepoStatus>,
         alpha: u8,
     ) {
         let center_y = y + h / 2.0;
@@ -183,6 +187,12 @@ impl Renderer {
         let dot_r = 4.0 * scale;
         let dot_color = if timer.status == FocusTimerStatus::Running {
             Color::from_rgba8(59, 130, 246, alpha) // Active Blue
+        } else if let Some(git) = git_status {
+            if git.is_clean {
+                Color::from_rgba8(34, 197, 94, alpha) // Clean Green
+            } else {
+                Color::from_rgba8(234, 179, 8, alpha) // Modified Amber
+            }
         } else {
             Color::from_rgba8(34, 197, 94, alpha) // Live Green
         };
@@ -201,6 +211,17 @@ impl Renderer {
             if timer.status == FocusTimerStatus::Running {
                 let time_str = format!("⏱ {} • Focus", timer.format_time());
                 draw_text(pixmap, font, &time_str, x + 28.0 * scale, text_y, 12.0 * scale, r, g, b, alpha);
+            } else if let Some(git) = git_status {
+                let git_text = format!(" {}", git.branch);
+                draw_text(pixmap, font, &git_text, x + 28.0 * scale, text_y, 11.5 * scale, r, g, b, alpha);
+
+                let summary = if git.is_clean {
+                    "clean".to_string()
+                } else {
+                    format!("~{} ?{}", git.modified_count, git.untracked_count)
+                };
+                let (sr, sg, sb) = self.theme.text_secondary;
+                draw_text(pixmap, font, &summary, x + 115.0 * scale, text_y, 10.5 * scale, sr, sg, sb, alpha);
             } else {
                 draw_text(pixmap, font, "Dev Island", x + 28.0 * scale, text_y, 12.0 * scale, r, g, b, alpha);
 
@@ -222,6 +243,7 @@ impl Renderer {
         scale: f32,
         timer: &FocusTimer,
         task_note: &TaskNote,
+        git_status: Option<&GitRepoStatus>,
         quick_links: &[QuickLink],
         snippets: &[Snippet],
         copied_feedback: Option<&str>,
@@ -234,17 +256,24 @@ impl Renderer {
         let right = x + w - pad;
         let mut curr_y = y + 14.0 * scale;
 
-        // 1. Header: App title + Active Task note label + [Esc]
+        // 1. Header: App title + Git Status / Active Task + [Esc]
         if let Some(ref font) = self.font {
             let (tr, tg, tb) = self.theme.text_primary;
             draw_text(pixmap, font, "Dynamic Island", left, curr_y + 7.0 * scale, 13.0 * scale, tr, tg, tb, alpha);
 
-            let task_display = format!("Task: {}", task_note.display_summary(16));
-            let (sr, sg, sb) = self.theme.text_secondary;
-            draw_text(pixmap, font, &task_display, left + 115.0 * scale, curr_y + 7.0 * scale, 11.0 * scale, sr, sg, sb, alpha);
+            if let Some(git) = git_status {
+                let badge = git.summary_badge();
+                let (gr, gg, gb) = if git.is_clean { (34, 197, 94) } else { (234, 179, 8) };
+                draw_text(pixmap, font, &badge, left + 108.0 * scale, curr_y + 7.0 * scale, 10.5 * scale, gr, gg, gb, alpha);
+            } else {
+                let task_display = format!("Task: {}", task_note.display_summary(16));
+                let (sr, sg, sb) = self.theme.text_secondary;
+                draw_text(pixmap, font, &task_display, left + 115.0 * scale, curr_y + 7.0 * scale, 11.0 * scale, sr, sg, sb, alpha);
+            }
 
             let collapse_hint = "[Esc]";
-            draw_text(pixmap, font, collapse_hint, right - 32.0 * scale, curr_y + 7.0 * scale, 11.0 * scale, sr, sg, sb, alpha);
+            let (hr, hg, hb) = self.theme.text_secondary;
+            draw_text(pixmap, font, collapse_hint, right - 32.0 * scale, curr_y + 7.0 * scale, 11.0 * scale, hr, hg, hb, alpha);
         }
 
         curr_y += 18.0 * scale;
