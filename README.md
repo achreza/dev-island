@@ -100,18 +100,18 @@ cargo run
 ```powershell
 cargo build --release
 ```
-The resulting executable is located at `target/release/dynamic_island_dev.exe` (~826 KB). It is built with the native Windows GUI subsystem (`windows_subsystem = "windows"`), launching cleanly with zero console window.
+The resulting executable is located at `target/release/dynamic_island_dev.exe` (~1.0 MB). It is built with the native Windows GUI subsystem (`windows_subsystem = "windows"`), launching cleanly with zero console window, complete with an embedded high-DPI Windows application icon (`assets/app.ico`) and PE version metadata.
 
 ### Create Portable Release Package
 To create a standalone distribution folder and zip archive:
 ```powershell
 New-Item -ItemType Directory -Force -Path "dist"
 Copy-Item "target\release\dynamic_island_dev.exe" "dist\dynamic_island.exe"
-Compress-Archive -Path "dist\*" -DestinationPath "dist\dynamic_island_windows_x64.zip" -Force
+Compress-Archive -Path "dist\dynamic_island.exe,README.md" -DestinationPath "dist\dynamic_island_windows_x64.zip" -Force
 ```
 The resulting package:
-* Portable executable: `dist/dynamic_island.exe` (self-contained, no installer needed)
-* Distribution zip: `dist/dynamic_island_windows_x64.zip` (~405 KB)
+* Portable executable: `dist/dynamic_island.exe` (self-contained, no installer needed, ~1.0 MB)
+* Distribution zip: `dist/dynamic_island_windows_x64.zip` (~512 KB)
 
 ### Controls & Interactions
 * **Left-click on pill:** Expands the island smoothly.
@@ -119,7 +119,11 @@ The resulting package:
 * **Global Shortcut (`Ctrl + Shift + D`):** Shows / expands / collapses island from anywhere in Windows.
 * **System Tray Icon:**
   * **Left-click:** Toggles island visibility / expand.
-  * **Right-click:** Opens context menu (Show/Hide, Expand/Collapse, Exit).
+  * **Right-click:** Opens context menu (Show/Hide, Expand/Collapse, Autostart Toggle, Exit).
+* **Developer Utilities:**
+  * **🎨 Hex:** Interactive screen eyedropper with crosshair, desktop dimming, live magnifier loupe swatch, and hex copy.
+  * **🆔 UUID:** Instant RFC 4122 UUID v4 copied to clipboard.
+  * **⚡ Format:** 1-click clipboard JSON formatter or JWT inspector.
 * **Configuration:** Edit `%APPDATA%\DynamicIslandDev\config.toml` to customize Focus Timer duration, Quick Links, and Code Snippets.
 
 ---
@@ -161,9 +165,17 @@ The resulting package:
   - [x] **Git Status Monitor:** live branch lookup, modified/untracked counters, and collapsed status badge (`src/features/git_status.rs`).
   - [x] **Active Dev Ports & Process Killer:** Win32 IP Helper API table querying listening ports (3000, 5173, 8080, etc.) with 1-click termination (`src/features/dev_ports.rs`).
   - [x] **Background Command Runner:** non-blocking background command execution with status channels (`src/features/command_runner.rs`).
-  - [x] **Screen Hex Color Picker:** 1-click cursor pixel sampling via Win32 GDI `GetPixel`, copying `#RRGGBB` directly to clipboard (`src/features/utilities.rs`).
+  - [x] **Interactive Screen Eyedropper:** Screenshot-style screen color picker with subtle desktop dimming, crosshair cursor (`IDC_CROSS`), floating loupe showing live color swatch + `#RRGGBB` + RGB labels, and 1-click clipboard copy with Esc/right-click cancel (`src/features/color_picker_overlay.rs`).
   - [x] **RFC 4122 UUID v4 Generator:** instantaneous native UUID v4 generation using Windows `CoCreateGuid` (`src/features/utilities.rs`).
   - [x] **JSON & JWT Formatter / Inspector:** 1-click clipboard formatter that decodes JWT claims (subject, issuer, expiration) or pretty-prints compact JSON with 2-space indentation (`src/features/utilities.rs`).
-  - [x] **21 unit tests** passing with 0 warnings and 0 errors.
+  - [x] **System Resource Telemetry:** On-demand CPU load delta and RAM metrics (`src/features/sys_monitor.rs`).
+  - [x] **23 unit tests** passing with 0 warnings and 0 errors.
+- [x] **Phase 5 — High-DPI Application Icon & UI Polish (Complete)**
+  - [x] **Embedded Windows Application Icon:** Custom 256x256 & 48x48 high-DPI `.ico` (`assets/app.ico`) embedded into PE resources via `build.rs` and `winres`. Eliminates the blank executable icon in File Explorer, Task Manager, Alt+Tab, and System Tray.
+  - [x] **Multi-Tier Diffusion Shadows:** 3-layer Gaussian drop shadow hierarchy (close ambient contact + medium depth + soft outer diffusion halo) for realistic floating elevation.
+  - [x] **Ambient Radial Indicator Glows:** Dual-ring soft radial glow behind indicator dots (timer, git status) to evoke active hardware telemetry.
+  - [x] **Tinted Glassmorphic Card States:** Dynamic hover styling with subtle tinted backgrounds and glowing borders for utility buttons (Format, UUID, Hex, Exit, Hide) and Focus Timer.
+  - [x] **Status Feedback Badges:** Emerald green pill badge for copied clipboard feedback toasts and amber pill for active listening ports.
+  - [x] **Clean 0-Warning Build:** All 23 unit tests pass cleanly, maintaining 0.0% steady-state idle CPU budget.
 #   d e v - i s l a n d  
  

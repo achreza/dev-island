@@ -6,7 +6,9 @@ use std::fs;
 
 use crate::animation::Animation;
 use crate::config::{QuickLink, Snippet};
-use crate::features::{FocusTimer, FocusTimerStatus, GitRepoStatus, TaskNote};
+use crate::features::{
+    ActivePort, FocusTimer, FocusTimerStatus, GitRepoStatus, SystemMetrics, TaskNote,
+};
 use crate::render::theme::Theme;
 
 pub struct Renderer {
@@ -60,6 +62,8 @@ impl Renderer {
         snippets: &[Snippet],
         copied_feedback: Option<&str>,
         hovered_button: Option<&str>,
+        sys_metrics: Option<&SystemMetrics>,
+        active_ports: &[ActivePort],
     ) -> Vec<ButtonArea> {
         pixmap.data_mut().fill(0);
 
@@ -133,6 +137,8 @@ impl Renderer {
                     copied_feedback,
                     alpha,
                     hovered_button,
+                    sys_metrics,
+                    active_ports,
                 );
             }
         }
@@ -150,7 +156,12 @@ impl Renderer {
         r: f32,
         scale: f32,
     ) {
-        let shadow_offsets = [(1.5 * scale, 3.0 * scale, 25u8), (2.5 * scale, 6.0 * scale, 15u8)];
+        // Multi-tier diffusion shadow for realistic floating depth
+        let shadow_offsets = [
+            (0.5 * scale, 1.5 * scale, 45u8),
+            (2.0 * scale, 4.0 * scale, 25u8),
+            (4.5 * scale, 9.0 * scale, 12u8),
+        ];
         for (inflate, y_off, alpha) in shadow_offsets {
             if let Some(path) = rounded_rect_path(
                 x - inflate,
@@ -185,18 +196,29 @@ impl Renderer {
         // Status indicator dot
         let dot_x = x + 16.0 * scale;
         let dot_r = 4.0 * scale;
-        let dot_color = if timer.status == FocusTimerStatus::Running {
-            Color::from_rgba8(59, 130, 246, alpha) // Active Blue
+        let (dot_color, dot_rgb) = if timer.status == FocusTimerStatus::Running {
+            (Color::from_rgba8(59, 130, 246, alpha), (59, 130, 246)) // Active Blue
         } else if let Some(git) = git_status {
             if git.is_clean {
-                Color::from_rgba8(34, 197, 94, alpha) // Clean Green
+                (Color::from_rgba8(34, 197, 94, alpha), (34, 197, 94)) // Clean Green
             } else {
-                Color::from_rgba8(234, 179, 8, alpha) // Modified Amber
+                (Color::from_rgba8(234, 179, 8, alpha), (234, 179, 8)) // Modified Amber
             }
         } else {
-            Color::from_rgba8(34, 197, 94, alpha) // Live Green
+            (Color::from_rgba8(34, 197, 94, alpha), (34, 197, 94)) // Live Green
         };
 
+        // Ambient radial glow behind dot
+        let glow_r = dot_r * 2.0;
+        if let Some(glow_path) = circle_path(dot_x, center_y, glow_r) {
+            let mut glow_paint = Paint::default();
+            let glow_a = (alpha as f32 * 0.28) as u8;
+            glow_paint.set_color(Color::from_rgba8(dot_rgb.0, dot_rgb.1, dot_rgb.2, glow_a));
+            glow_paint.anti_alias = true;
+            pixmap.fill_path(&glow_path, &glow_paint, FillRule::Winding, Transform::identity(), None);
+        }
+
+        // Core dot
         if let Some(dot_path) = circle_path(dot_x, center_y, dot_r) {
             let mut paint = Paint::default();
             paint.set_color(dot_color);
@@ -249,6 +271,8 @@ impl Renderer {
         copied_feedback: Option<&str>,
         alpha: u8,
         hovered_button: Option<&str>,
+        sys_metrics: Option<&SystemMetrics>,
+        active_ports: &[ActivePort],
     ) -> Vec<ButtonArea> {
         let mut buttons = Vec::new();
         let pad = 14.0 * scale;
@@ -256,7 +280,7 @@ impl Renderer {
         let right = x + w - pad;
         let mut curr_y = y + 14.0 * scale;
 
-        // 1. Header: App title + Git Status / Active Task + [Esc]
+        // 1. Header: App title + Git Status / Active Task + System Resource Metrics + [Esc]
         if let Some(ref font) = self.font {
             let (tr, tg, tb) = self.theme.text_primary;
             draw_text(pixmap, font, "Dynamic Island", left, curr_y + 7.0 * scale, 13.0 * scale, tr, tg, tb, alpha);
@@ -269,6 +293,13 @@ impl Renderer {
                 let task_display = format!("Task: {}", task_note.display_summary(16));
                 let (sr, sg, sb) = self.theme.text_secondary;
                 draw_text(pixmap, font, &task_display, left + 115.0 * scale, curr_y + 7.0 * scale, 11.0 * scale, sr, sg, sb, alpha);
+            }
+
+            // CPU & RAM resource monitor (Feature 5)
+            if let Some(metrics) = sys_metrics {
+                let sys_str = format!("CPU {:.0}%  RAM {}%", metrics.cpu_usage_pct, metrics.ram_usage_pct);
+                let (mr, mg, mb) = self.theme.text_secondary;
+                draw_text(pixmap, font, &sys_str, right - 142.0 * scale, curr_y + 7.0 * scale, 9.5 * scale, mr, mg, mb, alpha);
             }
 
             let collapse_hint = "[Esc]";
@@ -318,7 +349,12 @@ impl Renderer {
 
         let toggle_id = "timer_toggle";
         let is_toggle_hov = hovered_button == Some(toggle_id);
-        self.draw_card_bg(pixmap, left + 8.0 * scale, btn_y, btn_w, btn_h, 4.0 * scale, alpha, is_toggle_hov);
+        let toggle_tint = if timer.status == FocusTimerStatus::Running {
+            Some((59, 130, 246)) // Active Blue
+        } else {
+            Some((34, 197, 94))  // Ready Green
+        };
+        self.draw_tinted_card_bg(pixmap, left + 8.0 * scale, btn_y, btn_w, btn_h, 4.0 * scale, alpha, is_toggle_hov, toggle_tint);
         if let Some(ref font) = self.font {
             let label = if timer.status == FocusTimerStatus::Running { "Pause" } else { "Start" };
             let (tr, tg, tb) = self.theme.text_primary;
@@ -389,9 +425,9 @@ impl Renderer {
         let exit_x = right - exit_w;
         let exit_id = "exit_app";
         let is_exit_hov = hovered_button == Some(exit_id);
-        self.draw_card_bg(pixmap, exit_x, curr_y, exit_w, btn_h, 4.0 * scale, alpha, is_exit_hov);
+        self.draw_tinted_card_bg(pixmap, exit_x, curr_y, exit_w, btn_h, 4.0 * scale, alpha, is_exit_hov, Some((239, 68, 68)));
         if let Some(ref font) = self.font {
-            let (er, eg, eb) = if is_exit_hov { (239, 68, 68) } else { (180, 80, 80) };
+            let (er, eg, eb) = if is_exit_hov { (255, 255, 255) } else { (239, 68, 68) };
             draw_text(pixmap, font, "Exit", exit_x + 8.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, er, eg, eb, alpha);
         }
         buttons.push(ButtonArea { id: exit_id, x: exit_x, y: curr_y, w: exit_w, h: btn_h });
@@ -401,9 +437,9 @@ impl Renderer {
         let hide_x = exit_x - hide_w - 5.0 * scale;
         let hide_id = "hide_tray";
         let is_hide_hov = hovered_button == Some(hide_id);
-        self.draw_card_bg(pixmap, hide_x, curr_y, hide_w, btn_h, 4.0 * scale, alpha, is_hide_hov);
+        self.draw_tinted_card_bg(pixmap, hide_x, curr_y, hide_w, btn_h, 4.0 * scale, alpha, is_hide_hov, Some((148, 163, 184)));
         if let Some(ref font) = self.font {
-            let (sr, sg, sb) = self.theme.text_secondary;
+            let (sr, sg, sb) = if is_hide_hov { (255, 255, 255) } else { self.theme.text_secondary };
             draw_text(pixmap, font, "Hide", hide_x + 8.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, sr, sg, sb, alpha);
         }
         buttons.push(ButtonArea { id: hide_id, x: hide_x, y: curr_y, w: hide_w, h: btn_h });
@@ -413,9 +449,9 @@ impl Renderer {
         let fmt_x = hide_x - fmt_w - 6.0 * scale;
         let fmt_id = "util_format";
         let is_fmt_hov = hovered_button == Some(fmt_id);
-        self.draw_card_bg(pixmap, fmt_x, curr_y, fmt_w, btn_h, 4.0 * scale, alpha, is_fmt_hov);
+        self.draw_tinted_card_bg(pixmap, fmt_x, curr_y, fmt_w, btn_h, 4.0 * scale, alpha, is_fmt_hov, Some((250, 204, 21)));
         if let Some(ref font) = self.font {
-            let (tr, tg, tb) = if is_fmt_hov { (250, 204, 21) } else { self.theme.text_secondary };
+            let (tr, tg, tb) = if is_fmt_hov { (255, 255, 255) } else { (250, 204, 21) };
             draw_text(pixmap, font, "⚡ Format", fmt_x + 5.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, tr, tg, tb, alpha);
         }
         buttons.push(ButtonArea { id: fmt_id, x: fmt_x, y: curr_y, w: fmt_w, h: btn_h });
@@ -425,9 +461,9 @@ impl Renderer {
         let uuid_x = fmt_x - uuid_w - 5.0 * scale;
         let uuid_id = "util_uuid";
         let is_uuid_hov = hovered_button == Some(uuid_id);
-        self.draw_card_bg(pixmap, uuid_x, curr_y, uuid_w, btn_h, 4.0 * scale, alpha, is_uuid_hov);
+        self.draw_tinted_card_bg(pixmap, uuid_x, curr_y, uuid_w, btn_h, 4.0 * scale, alpha, is_uuid_hov, Some((96, 165, 250)));
         if let Some(ref font) = self.font {
-            let (tr, tg, tb) = if is_uuid_hov { (96, 165, 250) } else { self.theme.text_secondary };
+            let (tr, tg, tb) = if is_uuid_hov { (255, 255, 255) } else { (96, 165, 250) };
             draw_text(pixmap, font, "🆔 UUID", uuid_x + 5.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, tr, tg, tb, alpha);
         }
         buttons.push(ButtonArea { id: uuid_id, x: uuid_x, y: curr_y, w: uuid_w, h: btn_h });
@@ -437,18 +473,41 @@ impl Renderer {
         let hex_x = uuid_x - hex_w - 5.0 * scale;
         let hex_id = "util_hex";
         let is_hex_hov = hovered_button == Some(hex_id);
-        self.draw_card_bg(pixmap, hex_x, curr_y, hex_w, btn_h, 4.0 * scale, alpha, is_hex_hov);
+        self.draw_tinted_card_bg(pixmap, hex_x, curr_y, hex_w, btn_h, 4.0 * scale, alpha, is_hex_hov, Some((192, 132, 252)));
         if let Some(ref font) = self.font {
-            let (tr, tg, tb) = if is_hex_hov { (192, 132, 252) } else { self.theme.text_secondary };
+            let (tr, tg, tb) = if is_hex_hov { (255, 255, 255) } else { (192, 132, 252) };
             draw_text(pixmap, font, "🎨 Hex", hex_x + 5.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, tr, tg, tb, alpha);
         }
         buttons.push(ButtonArea { id: hex_id, x: hex_x, y: curr_y, w: hex_w, h: btn_h });
 
-        // Feedback toast on the left
+        // Feedback toast or active dev port on the left
         if let Some(ref font) = self.font {
             if let Some(toast) = copied_feedback {
-                let (gr, gg, gb) = (34, 197, 94);
-                draw_text(pixmap, font, toast, left + 4.0 * scale, curr_y + 14.0 * scale, 10.5 * scale, gr, gg, gb, alpha);
+                let toast_w = 114.0 * scale;
+                let toast_h = 20.0 * scale;
+                self.draw_tinted_card_bg(pixmap, left, curr_y, toast_w, toast_h, 4.0 * scale, alpha, true, Some((34, 197, 94)));
+                let (gr, gg, gb) = (74, 222, 128); // Vibrant emerald
+                draw_text(pixmap, font, toast, left + 8.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, gr, gg, gb, alpha);
+            } else if let Some(port) = active_ports.first() {
+                let text = format!("⚡:{} ({})", port.port, port.process_name);
+                let port_w = 88.0 * scale;
+                let port_h = 20.0 * scale;
+                self.draw_tinted_card_bg(pixmap, left, curr_y, port_w, port_h, 4.0 * scale, alpha, false, Some((245, 158, 11)));
+                let (pr, pg, pb) = (251, 191, 36); // Amber
+                draw_text(pixmap, font, &text, left + 6.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, pr, pg, pb, alpha);
+
+                // Small [kill] chip
+                let kill_id = "kill_port";
+                let is_kill_hov = hovered_button == Some(kill_id);
+                let kill_x = left + 92.0 * scale;
+                let kill_w = 26.0 * scale;
+                let kill_h = 20.0 * scale;
+                if kill_x + kill_w < hex_x - 4.0 * scale {
+                    self.draw_tinted_card_bg(pixmap, kill_x, curr_y, kill_w, kill_h, 3.0 * scale, alpha, is_kill_hov, Some((239, 68, 68)));
+                    let (kr, kg, kb) = if is_kill_hov { (255, 255, 255) } else { (239, 68, 68) };
+                    draw_text(pixmap, font, "kill", kill_x + 5.0 * scale, curr_y + 14.0 * scale, 8.5 * scale, kr, kg, kb, alpha);
+                    buttons.push(ButtonArea { id: kill_id, x: kill_x, y: curr_y, w: kill_w, h: kill_h });
+                }
             }
         }
 
@@ -466,8 +525,28 @@ impl Renderer {
         alpha: u8,
         hovered: bool,
     ) {
-        let bg_alpha = if hovered { 35 } else { 16 };
-        let color = Color::from_rgba8(255, 255, 255, (bg_alpha as f32 * (alpha as f32 / 255.0)) as u8);
+        self.draw_tinted_card_bg(pixmap, x, y, w, h, r, alpha, hovered, None);
+    }
+
+    fn draw_tinted_card_bg(
+        &self,
+        pixmap: &mut PixmapMut,
+        x: f32,
+        y: f32,
+        w: f32,
+        h: f32,
+        r: f32,
+        alpha: u8,
+        hovered: bool,
+        tint: Option<(u8, u8, u8)>,
+    ) {
+        let (cr, cg, cb) = tint.unwrap_or((255, 255, 255));
+        let bg_alpha = if hovered {
+            if tint.is_some() { 45 } else { 32 }
+        } else {
+            if tint.is_some() { 20 } else { 14 }
+        };
+        let color = Color::from_rgba8(cr, cg, cb, (bg_alpha as f32 * (alpha as f32 / 255.0)) as u8);
 
         if let Some(card_path) = rounded_rect_path(x, y, w, h, r) {
             let mut p = Paint::default();
@@ -475,8 +554,12 @@ impl Renderer {
             p.anti_alias = true;
             pixmap.fill_path(&card_path, &p, FillRule::Winding, Transform::identity(), None);
 
-            let stroke_alpha = if hovered { 45 } else { 20 };
-            let stroke_color = Color::from_rgba8(255, 255, 255, (stroke_alpha as f32 * (alpha as f32 / 255.0)) as u8);
+            let stroke_alpha = if hovered {
+                if tint.is_some() { 85 } else { 45 }
+            } else {
+                if tint.is_some() { 36 } else { 20 }
+            };
+            let stroke_color = Color::from_rgba8(cr, cg, cb, (stroke_alpha as f32 * (alpha as f32 / 255.0)) as u8);
             let mut sp = Paint::default();
             sp.set_color(stroke_color);
             let stroke = Stroke { width: 1.0, ..Default::default() };

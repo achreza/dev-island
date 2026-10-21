@@ -1,7 +1,8 @@
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{HWND, POINT};
 use windows::Win32::UI::Shell::{
-    Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW,
+    Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION,
+    NOTIFYICONDATAW, NOTIFYICON_VERSION_4,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, LoadIconW,
@@ -32,14 +33,18 @@ impl TrayIcon {
 
     pub fn add(&mut self) -> bool {
         unsafe {
-            let h_icon = LoadIconW(None, IDI_APPLICATION).unwrap_or(HICON::default());
+            use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+            let h_instance = GetModuleHandleW(None).unwrap_or_default();
+            let h_icon = LoadIconW(h_instance, PCWSTR(1 as _))
+                .or_else(|_| LoadIconW(None, IDI_APPLICATION))
+                .unwrap_or(HICON::default());
 
             let mut tip = [0u16; 128];
             let tip_text: Vec<u16> = "Dev Dynamic Island\0".encode_utf16().collect();
             let copy_len = tip_text.len().min(127);
             tip[..copy_len].copy_from_slice(&tip_text[..copy_len]);
 
-            let nid = NOTIFYICONDATAW {
+            let mut nid = NOTIFYICONDATAW {
                 cbSize: std::mem::size_of::<NOTIFYICONDATAW>() as u32,
                 hWnd: self.hwnd,
                 uID: 1,
@@ -50,12 +55,23 @@ impl TrayIcon {
                 ..Default::default()
             };
 
-            let success = Shell_NotifyIconW(NIM_ADD, &nid).as_bool();
+            // Delete any existing/stale tray icon for this window ID first
+            let _ = Shell_NotifyIconW(NIM_DELETE, &nid);
+
+            let mut success = Shell_NotifyIconW(NIM_ADD, &nid).as_bool();
+            if !success {
+                // Try NIM_MODIFY in case the tray still held it
+                success = Shell_NotifyIconW(NIM_MODIFY, &nid).as_bool();
+            }
+
             self.is_added = success;
             if success {
-                println!("System tray icon registered.");
+                nid.Anonymous.uVersion = NOTIFYICON_VERSION_4;
+                let _ = Shell_NotifyIconW(NIM_SETVERSION, &nid);
+                println!("System tray icon registered successfully.");
             } else {
-                eprintln!("Warning: Failed to create system tray icon.");
+                let err = windows::Win32::Foundation::GetLastError();
+                eprintln!("Warning: Failed to create system tray icon (h_icon: {:?}, err: {:?}).", h_icon, err);
             }
             success
         }

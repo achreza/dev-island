@@ -87,18 +87,16 @@ Phase 8: Compile & System Resource Monitor (Feature 5)
 
 ---
 
-## 5. Feature 5: Compile & System Resource Monitor
-
-### Objectives
-* Lightweight CPU & RAM load indicator.
-* Native Win32 queries:
-  * CPU: `GetSystemTimes` (idle vs kernel/user time delta).
-  * RAM: `GlobalMemoryStatusEx` (`ullAvailPhys` vs `ullTotalPhys`).
-* **Performance Budget:**
-  * Only active when the island is expanded or when a background command runner task is running.
-  * Completely dormant when collapsed to ensure 0.0% steady-state idle CPU.
+## 5. Feature 5: Compile & System Resource Monitor — ✅ COMPLETED
+* Implementation: [`src/features/sys_monitor.rs`](file:///d:/Flutter%20Project/dynamic_island_dev/src/features/sys_monitor.rs)
+* Features:
+  * **CPU Utilization:** queries `GetSystemTimes` for kernel and user vs idle time deltas.
+  * **Physical RAM:** queries `GlobalMemoryStatusEx` for memory load percentage and physical RAM totals in GB.
+  * **Strict 0.0% Idle Overhead:** Queries are only performed on-demand when the island is expanded (cached for 1.5s). Zero timer ticks or polling while collapsed.
+* UI Integration: Displays `CPU X%  RAM Y%` in the expanded card header.
+* Unit tests: 2 tests in `sys_monitor.rs` validating FILETIME conversion and system queries. All 23 tests passing.
 
 ---
 
-## 📋 Execution Order
-Features will be implemented strictly in order from **Feature 1** to **Feature 5**, with tests and benchmarks updated after each milestone.
+## 📋 Status Summary
+All 5 planned extended features are now **implemented, tested, and integrated** into the native Rust Dynamic Island!

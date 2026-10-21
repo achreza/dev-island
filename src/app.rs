@@ -12,7 +12,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW,
     GetMessageW, GetWindowLongPtrW, KillTimer, PostQuitMessage, RegisterClassW,
     SetForegroundWindow, SetTimer, SetWindowLongPtrW, ShowWindow, TranslateMessage,
-    CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HCURSOR, HICON, MSG, SW_HIDE, SW_SHOW,
+    CS_HREDRAW, CS_VREDRAW, GWLP_USERDATA, HCURSOR, MSG, SW_HIDE, SW_SHOW,
     WNDCLASSW,
     WA_INACTIVE, WM_ACTIVATE, WM_COMMAND, WM_DESTROY, WM_DISPLAYCHANGE,
     WM_DPICHANGED, WM_HOTKEY, WM_KEYDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
@@ -24,8 +24,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use crate::animation::Animation;
 use crate::config::AppConfig;
 use crate::features::{
-    DeveloperUtilities, FocusTimer, FocusTimerStatus, GitStatusMonitor, QuickLinkLauncher,
-    SnippetManager, TaskNote,
+    DeveloperUtilities, DevPortsMonitor, FocusTimer, FocusTimerStatus, GitStatusMonitor,
+    InteractiveColorPicker, QuickLinkLauncher, SnippetManager, SystemMonitor, TaskNote,
 };
 use crate::platform::{
     AutostartManager, DibBuffer, GlobalShortcut, MonitorGeometry, TrayIcon, HOTKEY_TOGGLE_ID,
@@ -50,6 +50,8 @@ pub struct AppState {
     pub task_note: TaskNote,
     pub snippets: SnippetManager,
     pub git_monitor: GitStatusMonitor,
+    pub dev_ports: DevPortsMonitor,
+    pub sys_monitor: SystemMonitor,
     pub dib: DibBuffer,
     pub pixmap: tiny_skia::Pixmap,
     pub geometry: MonitorGeometry,
@@ -94,6 +96,8 @@ impl AppState {
         let snippets = SnippetManager::new(config.snippets.clone());
         let repo_path = config.git_repo_path.clone().unwrap_or_else(|| ".".to_string());
         let git_monitor = GitStatusMonitor::new(repo_path);
+        let dev_ports = DevPortsMonitor::new();
+        let sys_monitor = SystemMonitor::new();
 
         Self {
             hwnd,
@@ -105,6 +109,8 @@ impl AppState {
             task_note,
             snippets,
             git_monitor,
+            dev_ports,
+            sys_monitor,
             dib,
             pixmap,
             geometry,
@@ -129,6 +135,18 @@ impl AppState {
         let toast_msg = self.copied_toast.map(|(msg, _)| msg);
         let git_status = self.git_monitor.get_status();
 
+        let sys_metrics = if self.anim.current_progress > 0.05 {
+            Some(self.sys_monitor.get_metrics())
+        } else {
+            None
+        };
+
+        let active_ports = if self.anim.current_progress > 0.05 {
+            self.dev_ports.get_active_ports()
+        } else {
+            &[]
+        };
+
         self.buttons = self.renderer.draw(
             &mut self.pixmap.as_mut(),
             &self.anim,
@@ -140,6 +158,8 @@ impl AppState {
             &self.snippets.snippets,
             toast_msg,
             self.hovered_button,
+            sys_metrics,
+            active_ports,
         );
 
         self.dib.update_layered_window(
@@ -264,6 +284,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
         let h_instance = GetModuleHandleW(None)?;
 
+        use windows::Win32::UI::WindowsAndMessaging::LoadIconW;
+        let h_icon = LoadIconW(h_instance, PCWSTR(1 as _)).unwrap_or_default();
+
         let wc = WNDCLASSW {
             style: CS_HREDRAW | CS_VREDRAW,
             lpfnWndProc: Some(wnd_proc),
@@ -271,7 +294,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             lpszClassName: CLASS_NAME,
             hbrBackground: HBRUSH(std::ptr::null_mut()),
             hCursor: HCURSOR(std::ptr::null_mut()),
-            hIcon: HICON(std::ptr::null_mut()),
+            hIcon: h_icon,
             ..Default::default()
         };
 
@@ -394,7 +417,9 @@ unsafe extern "system" fn wnd_proc(
             let client_x = (lparam.0 & 0xFFFF) as i16 as f32;
             let client_y = ((lparam.0 >> 16) & 0xFFFF) as i16 as f32;
 
-            let mut state = state_cell.borrow_mut();
+            let mut should_pick_color = false;
+            {
+                let mut state = state_cell.borrow_mut();
             if state.anim.current_progress >= 0.8 {
                 let mut action_handled = false;
                 for btn in state.buttons.clone() {
@@ -456,16 +481,9 @@ unsafe extern "system" fn wnd_proc(
                                 }
                             }
                             "util_hex" => {
-                                match DeveloperUtilities::pick_screen_color_at_cursor() {
-                                    Ok(color) => {
-                                        if state.snippets.copy_to_clipboard(&color.hex) {
-                                            state.show_copied_toast("✓ Copied color!");
-                                        }
-                                    }
-                                    Err(_) => {
-                                        state.show_copied_toast("⚠ Color pick failed");
-                                    }
-                                }
+                                state.collapse_island();
+                                state.render_frame();
+                                should_pick_color = true;
                             }
                             "util_uuid" => {
                                 let uuid = DeveloperUtilities::generate_uuid_v4();
@@ -514,6 +532,16 @@ unsafe extern "system" fn wnd_proc(
                                     state.show_copied_toast("⚠ Clipboard empty");
                                 }
                             }
+                            "kill_port" => {
+                                if let Some(port) = state.dev_ports.cached_active.first().cloned() {
+                                    if DevPortsMonitor::kill_process(port.pid) {
+                                        let msg = "✓ Killed dev port process!";
+                                        state.show_copied_toast(msg);
+                                    } else {
+                                        state.show_copied_toast("⚠ Failed to kill process");
+                                    }
+                                }
+                            }
                             "hide_tray" => {
                                 state.set_visible(false);
                             }
@@ -532,8 +560,22 @@ unsafe extern "system" fn wnd_proc(
                 if !action_handled {
                     state.collapse_island();
                 }
-            } else {
-                state.expand_island();
+                } else {
+                    state.expand_island();
+                }
+            }
+
+            if should_pick_color {
+                unsafe {
+                    let _ = KillTimer(hwnd, TIMER_ANIM_ID);
+                }
+
+                if let Some(color) = InteractiveColorPicker::pick_color() {
+                    let mut state = state_cell.borrow_mut();
+                    if state.snippets.copy_to_clipboard(&color.hex) {
+                        state.show_copied_toast("✓ Copied color!");
+                    }
+                }
             }
 
             LRESULT(0)
