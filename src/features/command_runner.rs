@@ -12,6 +12,7 @@ pub struct CommandResult {
     pub finished_at: Instant,
 }
 
+#[allow(dead_code)]
 pub struct CommandRunner {
     pub running_cmd: Option<String>,
     pub last_result: Option<CommandResult>,
@@ -19,6 +20,7 @@ pub struct CommandRunner {
     tx: Sender<CommandResult>,
 }
 
+#[allow(dead_code)]
 impl CommandRunner {
     pub fn new() -> Self {
         let (tx, rx) = channel();

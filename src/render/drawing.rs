@@ -381,37 +381,76 @@ impl Renderer {
 
         curr_y += card_h + 8.0 * scale;
 
-        // 3. Bottom Row: Feedback toast / Hide to tray / Exit
+        // 3. Bottom Row: Developer Micro-Tools + Feedback Toast + [Hide] & [Exit]
+        let btn_h = 20.0 * scale;
+
+        // Exit button
+        let exit_w = 36.0 * scale;
+        let exit_x = right - exit_w;
+        let exit_id = "exit_app";
+        let is_exit_hov = hovered_button == Some(exit_id);
+        self.draw_card_bg(pixmap, exit_x, curr_y, exit_w, btn_h, 4.0 * scale, alpha, is_exit_hov);
+        if let Some(ref font) = self.font {
+            let (er, eg, eb) = if is_exit_hov { (239, 68, 68) } else { (180, 80, 80) };
+            draw_text(pixmap, font, "Exit", exit_x + 8.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, er, eg, eb, alpha);
+        }
+        buttons.push(ButtonArea { id: exit_id, x: exit_x, y: curr_y, w: exit_w, h: btn_h });
+
+        // Hide button
+        let hide_w = 38.0 * scale;
+        let hide_x = exit_x - hide_w - 5.0 * scale;
+        let hide_id = "hide_tray";
+        let is_hide_hov = hovered_button == Some(hide_id);
+        self.draw_card_bg(pixmap, hide_x, curr_y, hide_w, btn_h, 4.0 * scale, alpha, is_hide_hov);
+        if let Some(ref font) = self.font {
+            let (sr, sg, sb) = self.theme.text_secondary;
+            draw_text(pixmap, font, "Hide", hide_x + 8.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, sr, sg, sb, alpha);
+        }
+        buttons.push(ButtonArea { id: hide_id, x: hide_x, y: curr_y, w: hide_w, h: btn_h });
+
+        // Format JSON/JWT button
+        let fmt_w = 64.0 * scale;
+        let fmt_x = hide_x - fmt_w - 6.0 * scale;
+        let fmt_id = "util_format";
+        let is_fmt_hov = hovered_button == Some(fmt_id);
+        self.draw_card_bg(pixmap, fmt_x, curr_y, fmt_w, btn_h, 4.0 * scale, alpha, is_fmt_hov);
+        if let Some(ref font) = self.font {
+            let (tr, tg, tb) = if is_fmt_hov { (250, 204, 21) } else { self.theme.text_secondary };
+            draw_text(pixmap, font, "⚡ Format", fmt_x + 5.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, tr, tg, tb, alpha);
+        }
+        buttons.push(ButtonArea { id: fmt_id, x: fmt_x, y: curr_y, w: fmt_w, h: btn_h });
+
+        // UUID generator button
+        let uuid_w = 46.0 * scale;
+        let uuid_x = fmt_x - uuid_w - 5.0 * scale;
+        let uuid_id = "util_uuid";
+        let is_uuid_hov = hovered_button == Some(uuid_id);
+        self.draw_card_bg(pixmap, uuid_x, curr_y, uuid_w, btn_h, 4.0 * scale, alpha, is_uuid_hov);
+        if let Some(ref font) = self.font {
+            let (tr, tg, tb) = if is_uuid_hov { (96, 165, 250) } else { self.theme.text_secondary };
+            draw_text(pixmap, font, "🆔 UUID", uuid_x + 5.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, tr, tg, tb, alpha);
+        }
+        buttons.push(ButtonArea { id: uuid_id, x: uuid_x, y: curr_y, w: uuid_w, h: btn_h });
+
+        // Screen Color Picker button
+        let hex_w = 44.0 * scale;
+        let hex_x = uuid_x - hex_w - 5.0 * scale;
+        let hex_id = "util_hex";
+        let is_hex_hov = hovered_button == Some(hex_id);
+        self.draw_card_bg(pixmap, hex_x, curr_y, hex_w, btn_h, 4.0 * scale, alpha, is_hex_hov);
+        if let Some(ref font) = self.font {
+            let (tr, tg, tb) = if is_hex_hov { (192, 132, 252) } else { self.theme.text_secondary };
+            draw_text(pixmap, font, "🎨 Hex", hex_x + 5.0 * scale, curr_y + 14.0 * scale, 9.5 * scale, tr, tg, tb, alpha);
+        }
+        buttons.push(ButtonArea { id: hex_id, x: hex_x, y: curr_y, w: hex_w, h: btn_h });
+
+        // Feedback toast on the left
         if let Some(ref font) = self.font {
             if let Some(toast) = copied_feedback {
                 let (gr, gg, gb) = (34, 197, 94);
-                draw_text(pixmap, font, toast, left + 4.0 * scale, curr_y + 14.0 * scale, 11.0 * scale, gr, gg, gb, alpha);
+                draw_text(pixmap, font, toast, left + 4.0 * scale, curr_y + 14.0 * scale, 10.5 * scale, gr, gg, gb, alpha);
             }
         }
-
-        // Action Buttons: [Hide] and [Exit]
-        let action_btn_w = 48.0 * scale;
-        let action_btn_h = 20.0 * scale;
-
-        let hide_id = "hide_tray";
-        let hide_x = right - action_btn_w * 2.0 - 6.0 * scale;
-        let is_hide_hov = hovered_button == Some(hide_id);
-        self.draw_card_bg(pixmap, hide_x, curr_y, action_btn_w, action_btn_h, 4.0 * scale, alpha, is_hide_hov);
-        if let Some(ref font) = self.font {
-            let (sr, sg, sb) = self.theme.text_secondary;
-            draw_text(pixmap, font, "Hide", hide_x + 11.0 * scale, curr_y + 14.0 * scale, 10.0 * scale, sr, sg, sb, alpha);
-        }
-        buttons.push(ButtonArea { id: hide_id, x: hide_x, y: curr_y, w: action_btn_w, h: action_btn_h });
-
-        let exit_id = "exit_app";
-        let exit_x = right - action_btn_w;
-        let is_exit_hov = hovered_button == Some(exit_id);
-        self.draw_card_bg(pixmap, exit_x, curr_y, action_btn_w, action_btn_h, 4.0 * scale, alpha, is_exit_hov);
-        if let Some(ref font) = self.font {
-            let (er, eg, eb) = if is_exit_hov { (239, 68, 68) } else { (180, 80, 80) };
-            draw_text(pixmap, font, "Exit", exit_x + 13.0 * scale, curr_y + 14.0 * scale, 10.0 * scale, er, eg, eb, alpha);
-        }
-        buttons.push(ButtonArea { id: exit_id, x: exit_x, y: curr_y, w: action_btn_w, h: action_btn_h });
 
         buttons
     }

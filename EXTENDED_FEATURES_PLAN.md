@@ -75,14 +75,15 @@ Phase 8: Compile & System Resource Monitor (Feature 5)
 
 ---
 
-## 4. Feature 4: Developer Scratchpad & Utilities
-
-### Objectives
-* Quick formatting and debugging utilities:
-  * **JSON Formatter:** validates and pretty-prints minified JSON payloads from clipboard.
-  * **Base64 Tool:** decodes / encodes text or JWT token payloads.
-* UI:
-  * Dedicated tab or modal card in the expanded island with copy-to-clipboard action.
+## 4. Feature 4: Developer Scratchpad & Utilities — ✅ COMPLETED
+* Implementation: [`src/features/utilities.rs`](file:///d:/Flutter%20Project/dynamic_island_dev/src/features/utilities.rs)
+* Features:
+  * **JSON Formatter & Validator:** pretty-prints compact/unformatted JSON with 2 spaces or minifies.
+  * **JWT Inspector:** base64url-decodes token header & claims payload, parses JSON, and displays human-readable expiration time.
+  * **UUID v4 Generator:** native RFC 4122 UUID v4 generation using Windows COM `CoCreateGuid`.
+  * **Screen Hex Color Picker:** samples pixel color under mouse cursor across all monitors via Win32 GDI `GetPixel` and copies `#RRGGBB` to clipboard.
+* UI Integration: 3 micro-tool action chips (`🎨 Hex`, `🆔 UUID`, `⚡ Format`) in expanded Dynamic Island bottom row.
+* Unit tests: 4 dedicated tests in `utilities.rs` validating formatting, JWT parsing, UUID v4 format, and color math. All 21 tests passing.
 
 ---
 

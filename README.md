@@ -78,6 +78,13 @@ dynamic_island_dev/
 * Rust toolchain (1.80+ or latest stable; tested on `rustc 1.99.1`)
 * Visual Studio C++ Build Tools (MSVC `x86_64-pc-windows-msvc`)
 
+> [!TIP]
+> If `cargo` is not recognized in your PowerShell terminal, add it to your session PATH:
+> ```powershell
+> $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+> ```
+> Or invoke it directly via `& "$env:USERPROFILE\.cargo\bin\cargo.exe" run`.
+
 ### Run Tests
 ```powershell
 cargo test
@@ -149,6 +156,14 @@ The resulting package:
   - [x] **Windows Autostart Toggle:** `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` toggle via system tray context menu (`src/platform/autostart.rs`).
   - [x] **Error Recovery & Hardening:** Graceful TOML fallback, safe URL/process validation, and clean crash-free resource cleanup (`Drop` handlers for GDI handles, tray icon, and global shortcut).
   - [x] **Standalone Portable Distribution:** Packaged into `dist/dynamic_island_windows_x64.zip` (~408 KB) with zero external installer or runtime dependencies.
-  - [x] **13 unit tests** passing with 0 warnings and 0 errors.
+  - [x] **13 unit tests** passing with 0 warnings and 0 errors in Phase 3.
+- [x] **Phase 4 — Developer Utilities & Extended Features (Complete)**
+  - [x] **Git Status Monitor:** live branch lookup, modified/untracked counters, and collapsed status badge (`src/features/git_status.rs`).
+  - [x] **Active Dev Ports & Process Killer:** Win32 IP Helper API table querying listening ports (3000, 5173, 8080, etc.) with 1-click termination (`src/features/dev_ports.rs`).
+  - [x] **Background Command Runner:** non-blocking background command execution with status channels (`src/features/command_runner.rs`).
+  - [x] **Screen Hex Color Picker:** 1-click cursor pixel sampling via Win32 GDI `GetPixel`, copying `#RRGGBB` directly to clipboard (`src/features/utilities.rs`).
+  - [x] **RFC 4122 UUID v4 Generator:** instantaneous native UUID v4 generation using Windows `CoCreateGuid` (`src/features/utilities.rs`).
+  - [x] **JSON & JWT Formatter / Inspector:** 1-click clipboard formatter that decodes JWT claims (subject, issuer, expiration) or pretty-prints compact JSON with 2-space indentation (`src/features/utilities.rs`).
+  - [x] **21 unit tests** passing with 0 warnings and 0 errors.
 #   d e v - i s l a n d  
  

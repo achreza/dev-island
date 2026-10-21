@@ -1,9 +1,9 @@
 use std::path::Path;
 use std::time::Instant;
 use windows::core::PWSTR;
-use windows::Win32::Foundation::{CloseHandle, HANDLE};
+use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::NetworkManagement::IpHelper::{
-    GetExtendedTcpTable, MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_ALL,
+    GetExtendedTcpTable, MIB_TCPTABLE_OWNER_PID, TCP_TABLE_OWNER_PID_ALL,
 };
 use windows::Win32::System::Threading::{
     OpenProcess, QueryFullProcessImageNameW, TerminateProcess,
@@ -17,6 +17,7 @@ pub struct ActivePort {
     pub process_name: String,
 }
 
+#[allow(dead_code)]
 pub struct DevPortsMonitor {
     pub interesting_ports: Vec<u16>,
     pub cached_active: Vec<ActivePort>,
@@ -24,6 +25,7 @@ pub struct DevPortsMonitor {
     pub cache_ttl_secs: f32,
 }
 
+#[allow(dead_code)]
 impl DevPortsMonitor {
     pub fn new() -> Self {
         Self {

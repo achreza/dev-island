@@ -24,7 +24,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use crate::animation::Animation;
 use crate::config::AppConfig;
 use crate::features::{
-    FocusTimer, FocusTimerStatus, GitStatusMonitor, QuickLinkLauncher, SnippetManager, TaskNote,
+    DeveloperUtilities, FocusTimer, FocusTimerStatus, GitStatusMonitor, QuickLinkLauncher,
+    SnippetManager, TaskNote,
 };
 use crate::platform::{
     AutostartManager, DibBuffer, GlobalShortcut, MonitorGeometry, TrayIcon, HOTKEY_TOGGLE_ID,
@@ -452,6 +453,65 @@ unsafe extern "system" fn wnd_proc(
                                     if state.snippets.copy_to_clipboard(&snip.content) {
                                         state.show_copied_toast("✓ Copied snippet 3!");
                                     }
+                                }
+                            }
+                            "util_hex" => {
+                                match DeveloperUtilities::pick_screen_color_at_cursor() {
+                                    Ok(color) => {
+                                        if state.snippets.copy_to_clipboard(&color.hex) {
+                                            state.show_copied_toast("✓ Copied color!");
+                                        }
+                                    }
+                                    Err(_) => {
+                                        state.show_copied_toast("⚠ Color pick failed");
+                                    }
+                                }
+                            }
+                            "util_uuid" => {
+                                let uuid = DeveloperUtilities::generate_uuid_v4();
+                                if state.snippets.copy_to_clipboard(&uuid) {
+                                    state.show_copied_toast("✓ Copied UUID v4!");
+                                }
+                            }
+                            "util_format" => {
+                                if let Some(clip_text) = SnippetManager::get_clipboard_text() {
+                                    let trimmed = clip_text.trim();
+                                    if trimmed.split('.').count() == 3 && (trimmed.starts_with("eyJ") || trimmed.contains('.')) {
+                                        match DeveloperUtilities::inspect_jwt(trimmed) {
+                                            Ok(jwt) => {
+                                                let formatted = format!("// Header:\n{}\n\n// Payload:\n{}", jwt.header_json, jwt.payload_json);
+                                                if state.snippets.copy_to_clipboard(&formatted) {
+                                                    state.show_copied_toast("✓ Decoded JWT!");
+                                                }
+                                            }
+                                            Err(_) => {
+                                                // Fallback to JSON format
+                                                match DeveloperUtilities::format_json(trimmed) {
+                                                    Ok(formatted) => {
+                                                        if state.snippets.copy_to_clipboard(&formatted) {
+                                                            state.show_copied_toast("✓ Formatted JSON!");
+                                                        }
+                                                    }
+                                                    Err(_) => {
+                                                        state.show_copied_toast("⚠ Invalid JSON/JWT");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        match DeveloperUtilities::format_json(trimmed) {
+                                            Ok(formatted) => {
+                                                if state.snippets.copy_to_clipboard(&formatted) {
+                                                    state.show_copied_toast("✓ Formatted JSON!");
+                                                }
+                                            }
+                                            Err(_) => {
+                                                state.show_copied_toast("⚠ Invalid JSON");
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    state.show_copied_toast("⚠ Clipboard empty");
                                 }
                             }
                             "hide_tray" => {

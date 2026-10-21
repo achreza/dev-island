@@ -61,6 +61,45 @@ impl SnippetManager {
             success
         }
     }
+
+    /// Reads the current text from the Windows clipboard on demand.
+    pub fn get_clipboard_text() -> Option<String> {
+        unsafe {
+            use windows::Win32::Foundation::HGLOBAL;
+            use windows::Win32::System::DataExchange::GetClipboardData;
+
+            if OpenClipboard(HWND::default()).is_err() {
+                return None;
+            }
+
+            let handle = match GetClipboardData(13) { // CF_UNICODETEXT
+                Ok(h) => h,
+                Err(_) => {
+                    let _ = CloseClipboard();
+                    return None;
+                }
+            };
+
+            let ptr = GlobalLock(HGLOBAL(handle.0)) as *const u16;
+            if ptr.is_null() {
+                let _ = CloseClipboard();
+                return None;
+            }
+
+            let mut len = 0;
+            while *ptr.add(len) != 0 {
+                len += 1;
+            }
+
+            let slice = std::slice::from_raw_parts(ptr, len);
+            let text = String::from_utf16_lossy(slice);
+
+            let _ = GlobalUnlock(HGLOBAL(handle.0));
+            let _ = CloseClipboard();
+
+            Some(text)
+        }
+    }
 }
 
 #[cfg(test)]
