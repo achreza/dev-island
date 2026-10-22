@@ -13,6 +13,7 @@ pub struct GitRepoStatus {
 }
 
 impl GitRepoStatus {
+    #[allow(dead_code)]
     pub fn summary_badge(&self) -> String {
         if self.is_clean {
             format!(" {} [clean]", self.branch)

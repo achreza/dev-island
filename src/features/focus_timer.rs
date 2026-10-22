@@ -58,6 +58,28 @@ impl FocusTimer {
         self.remaining_secs = self.duration_secs;
     }
 
+    pub fn set_duration(&mut self, secs: u32) {
+        self.duration_secs = secs;
+        self.remaining_secs = secs;
+        self.status = FocusTimerStatus::Stopped;
+    }
+
+    pub fn add_seconds(&mut self, secs: u32) {
+        self.duration_secs = self.duration_secs.saturating_add(secs);
+        self.remaining_secs = self.remaining_secs.saturating_add(secs);
+        if self.status == FocusTimerStatus::Completed {
+            self.status = FocusTimerStatus::Running;
+            self.last_tick = Instant::now();
+        }
+    }
+
+    pub fn progress_pct(&self) -> f32 {
+        if self.duration_secs == 0 {
+            return 1.0;
+        }
+        (1.0 - (self.remaining_secs as f32 / self.duration_secs as f32)).clamp(0.0, 1.0)
+    }
+
     /// Advances the timer. Returns true if remaining seconds changed.
     pub fn tick(&mut self) -> bool {
         if self.status != FocusTimerStatus::Running {
@@ -134,5 +156,22 @@ mod tests {
 
         timer.remaining_secs = 3599;
         assert_eq!(timer.format_time(), "59:59");
+    }
+
+    #[test]
+    fn test_focus_timer_presets_and_progress() {
+        let mut timer = FocusTimer::new(1500); // 25 mins
+        assert_eq!(timer.progress_pct(), 0.0);
+
+        timer.set_duration(300); // 5 mins
+        assert_eq!(timer.remaining_secs, 300);
+        assert_eq!(timer.format_time(), "05:00");
+
+        timer.remaining_secs = 150;
+        assert!((timer.progress_pct() - 0.5).abs() < 0.01);
+
+        timer.add_seconds(300);
+        assert_eq!(timer.remaining_secs, 450);
+        assert_eq!(timer.duration_secs, 600);
     }
 }
